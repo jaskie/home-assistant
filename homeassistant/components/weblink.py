@@ -20,7 +20,7 @@ CONF_ENTITIES = 'entities'
 DOMAIN = 'weblink'
 
 ENTITIES_SCHEMA = vol.Schema({
-    vol.Required(CONF_URL): cv.url,
+    vol.Required(CONF_URL): cv.string,
     vol.Required(CONF_NAME): cv.string,
     vol.Optional(CONF_ICON): cv.icon,
 })
