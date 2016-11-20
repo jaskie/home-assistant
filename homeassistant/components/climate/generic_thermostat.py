@@ -21,8 +21,6 @@ _LOGGER = logging.getLogger(__name__)
 
 DEPENDENCIES = ['switch', 'sensor']
 
-TOL_TEMP = 0.3
-
 CONF_NAME = 'name'
 DEFAULT_NAME = 'Generic Thermostat'
 CONF_HEATER = 'heater'
@@ -32,6 +30,8 @@ CONF_MAX_TEMP = 'max_temp'
 CONF_TARGET_TEMP = 'target_temp'
 CONF_AC_MODE = 'ac_mode'
 CONF_MIN_DUR = 'min_cycle_duration'
+CONF_HYSTERESIS = 'hysteresis'
+DEFAULT_HYSTERESIS = 0.4
 
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
@@ -43,6 +43,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_MIN_TEMP): vol.Coerce(float),
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
     vol.Optional(CONF_TARGET_TEMP): vol.Coerce(float),
+    vol.Optional(CONF_HYSTERESIS, default=DEFAULT_HYSTERESIS): vol.Coerce(float),
 })
 
 
@@ -56,23 +57,25 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     target_temp = config.get(CONF_TARGET_TEMP)
     ac_mode = config.get(CONF_AC_MODE)
     min_cycle_duration = config.get(CONF_MIN_DUR)
+    hysteresis = config.get(CONF_HYSTERESIS)
 
     add_devices([GenericThermostat(
         hass, name, heater_entity_id, sensor_entity_id, min_temp, max_temp,
-        target_temp, ac_mode, min_cycle_duration)])
+        target_temp, ac_mode, min_cycle_duration, hysteresis)])
 
 
 class GenericThermostat(ClimateDevice):
     """Representation of a GenericThermostat device."""
 
     def __init__(self, hass, name, heater_entity_id, sensor_entity_id,
-                 min_temp, max_temp, target_temp, ac_mode, min_cycle_duration):
+                 min_temp, max_temp, target_temp, ac_mode, min_cycle_duration, hysteresis):
         """Initialize the thermostat."""
         self.hass = hass
         self._name = name
         self.heater_entity_id = heater_entity_id
         self.ac_mode = ac_mode
         self.min_cycle_duration = min_cycle_duration
+        self.hysteresis = hysteresis
 
         self._active = False
         self._cur_temp = None
@@ -193,7 +196,7 @@ class GenericThermostat(ClimateDevice):
                 return
 
         if self.ac_mode:
-            too_hot = self._cur_temp - self._target_temp > TOL_TEMP
+            too_hot = self._cur_temp - self._target_temp > self.hysteresis / 2
             is_cooling = self._is_device_active
             if too_hot and not is_cooling:
                 _LOGGER.info('Turning on AC %s', self.heater_entity_id)
@@ -202,7 +205,7 @@ class GenericThermostat(ClimateDevice):
                 _LOGGER.info('Turning off AC %s', self.heater_entity_id)
                 switch.turn_off(self.hass, self.heater_entity_id)
         else:
-            too_cold = self._target_temp - self._cur_temp > TOL_TEMP
+            too_cold = self._target_temp - self._cur_temp > self.hysteresis / 2
             is_heating = self._is_device_active
 
             if too_cold and not is_heating:
@@ -211,6 +214,7 @@ class GenericThermostat(ClimateDevice):
             elif not too_cold and is_heating:
                 _LOGGER.info('Turning off heater %s', self.heater_entity_id)
                 switch.turn_off(self.hass, self.heater_entity_id)
+
 
     @property
     def _is_device_active(self):
