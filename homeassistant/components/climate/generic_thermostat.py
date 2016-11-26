@@ -83,6 +83,7 @@ class GenericThermostat(ClimateDevice):
         self._max_temp = max_temp
         self._target_temp = target_temp
         self._unit = hass.config.units.temperature_unit
+        self._is_device_active = switch.is_on(hass, self.heater_entity_id)
 
         track_state_change(hass, sensor_entity_id, self._sensor_changed)
 
@@ -132,7 +133,7 @@ class GenericThermostat(ClimateDevice):
             return
         self._target_temp = temperature
         self._control_heating()
-        self.update_ha_state()
+        self.update_ha_state(True)
 
     @property
     def min_temp(self):
@@ -158,15 +159,13 @@ class GenericThermostat(ClimateDevice):
         """Called when temperature changes."""
         if new_state is None:
             return
-
         self._update_temp(new_state)
         self._control_heating()
-        self.schedule_update_ha_state()
+        self.update_ha_state(True)
 
     def _update_temp(self, state):
         """Update thermostat with latest state from sensor."""
         unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
-
         try:
             self._cur_temp = self.hass.config.units.temperature(
                 float(state.state), unit)
@@ -184,6 +183,7 @@ class GenericThermostat(ClimateDevice):
         if not self._active:
             return
 
+        self._is_device_active = switch.is_on(self.hass, self.heater_entity_id)
         if self.min_cycle_duration:
             if self._is_device_active:
                 current_state = STATE_ON
@@ -201,9 +201,11 @@ class GenericThermostat(ClimateDevice):
             if too_hot and not is_cooling:
                 _LOGGER.info('Turning on AC %s', self.heater_entity_id)
                 switch.turn_on(self.hass, self.heater_entity_id)
+                self._is_device_active = True
             elif not too_hot and is_cooling:
                 _LOGGER.info('Turning off AC %s', self.heater_entity_id)
                 switch.turn_off(self.hass, self.heater_entity_id)
+                self._is_device_active = False
         else:
             too_cold = self._target_temp - self._cur_temp > self.hysteresis / 2
             is_heating = self._is_device_active
@@ -211,12 +213,9 @@ class GenericThermostat(ClimateDevice):
             if too_cold and not is_heating:
                 _LOGGER.info('Turning on heater %s', self.heater_entity_id)
                 switch.turn_on(self.hass, self.heater_entity_id)
+                self._is_device_active = True
             elif not too_cold and is_heating:
                 _LOGGER.info('Turning off heater %s', self.heater_entity_id)
                 switch.turn_off(self.hass, self.heater_entity_id)
+                self._is_device_active = False
 
-
-    @property
-    def _is_device_active(self):
-        """If the toggleable device is currently active."""
-        return switch.is_on(self.hass, self.heater_entity_id)
