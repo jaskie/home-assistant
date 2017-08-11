@@ -1,4 +1,5 @@
 """The tests for the persistent notification component."""
+from homeassistant.setup import setup_component
 import homeassistant.components.persistent_notification as pn
 
 from tests.common import get_test_home_assistant
@@ -10,7 +11,7 @@ class TestPersistentNotification:
     def setup_method(self, method):
         """Setup things to be run when tests are started."""
         self.hass = get_test_home_assistant()
-        pn.setup(self.hass, {})
+        setup_component(self.hass, pn.DOMAIN, {})
 
     def teardown_method(self, method):
         """Stop everything that was started."""
@@ -63,3 +64,16 @@ class TestPersistentNotification:
         state = self.hass.states.get(entity_ids[0])
         assert state.state == '{{ message + 1 }}'
         assert state.attributes.get('title') == '{{ title + 1 }}'
+
+    def test_dismiss_notification(self):
+        """Ensure removal of specific notification."""
+        assert len(self.hass.states.entity_ids(pn.DOMAIN)) == 0
+
+        pn.create(self.hass, 'test', notification_id='Beer 2')
+        self.hass.block_till_done()
+
+        assert len(self.hass.states.entity_ids(pn.DOMAIN)) == 1
+        pn.dismiss(self.hass, notification_id='Beer 2')
+        self.hass.block_till_done()
+
+        assert len(self.hass.states.entity_ids(pn.DOMAIN)) == 0

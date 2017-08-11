@@ -4,6 +4,7 @@ Support for the definition of zones.
 For more details about this component, please refer to the documentation at
 https://home-assistant.io/components/zone/
 """
+import asyncio
 import logging
 
 import voluptuous as vol
@@ -11,8 +12,10 @@ import voluptuous as vol
 from homeassistant.const import (
     ATTR_HIDDEN, ATTR_LATITUDE, ATTR_LONGITUDE, CONF_NAME, CONF_LATITUDE,
     CONF_LONGITUDE, CONF_ICON)
-from homeassistant.helpers import extract_domain_configs
-from homeassistant.helpers.entity import Entity, generate_entity_id
+from homeassistant.loader import bind_hass
+from homeassistant.helpers import config_per_platform
+from homeassistant.helpers.entity import Entity, async_generate_entity_id
+from homeassistant.util.async import run_callback_threadsafe
 from homeassistant.util.location import distance
 import homeassistant.helpers.config_validation as cv
 
@@ -37,23 +40,34 @@ ICON_IMPORT = 'mdi:import'
 
 STATE = 'zoning'
 
-CONFIG_SCHEMA = vol.Schema({
-    DOMAIN: vol.Schema({
-        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Required(CONF_LATITUDE): cv.latitude,
-        vol.Required(CONF_LONGITUDE): cv.longitude,
-        vol.Optional(CONF_RADIUS, default=DEFAULT_RADIUS): vol.Coerce(float),
-        vol.Optional(CONF_PASSIVE, default=DEFAULT_PASSIVE): cv.boolean,
-        vol.Optional(CONF_ICON): cv.icon,
-    }),
+# The config that zone accepts is the same as if it has platforms.
+PLATFORM_SCHEMA = vol.Schema({
+    vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+    vol.Required(CONF_LATITUDE): cv.latitude,
+    vol.Required(CONF_LONGITUDE): cv.longitude,
+    vol.Optional(CONF_RADIUS, default=DEFAULT_RADIUS): vol.Coerce(float),
+    vol.Optional(CONF_PASSIVE, default=DEFAULT_PASSIVE): cv.boolean,
+    vol.Optional(CONF_ICON): cv.icon,
 }, extra=vol.ALLOW_EXTRA)
 
 
+@bind_hass
 def active_zone(hass, latitude, longitude, radius=0):
     """Find the active zone for given latitude, longitude."""
+    return run_callback_threadsafe(
+        hass.loop, async_active_zone, hass, latitude, longitude, radius
+    ).result()
+
+
+@bind_hass
+def async_active_zone(hass, latitude, longitude, radius=0):
+    """Find the active zone for given latitude, longitude.
+
+    This method must be run in the event loop.
+    """
     # Sort entity IDs so that we are deterministic if equal distance to 2 zones
     zones = (hass.states.get(entity_id) for entity_id
-             in sorted(hass.states.entity_ids(DOMAIN)))
+             in sorted(hass.states.async_entity_ids(DOMAIN)))
 
     min_dist = None
     closest = None
@@ -80,7 +94,10 @@ def active_zone(hass, latitude, longitude, radius=0):
 
 
 def in_zone(zone, latitude, longitude, radius=0):
-    """Test if given latitude, longitude is in given zone."""
+    """Test if given latitude, longitude is in given zone.
+
+    Async friendly.
+    """
     zone_dist = distance(
         latitude, longitude,
         zone.attributes[ATTR_LATITUDE], zone.attributes[ATTR_LONGITUDE])
@@ -88,63 +105,36 @@ def in_zone(zone, latitude, longitude, radius=0):
     return zone_dist - radius < zone.attributes[ATTR_RADIUS]
 
 
-def setup(hass, config):
-    """Setup zone."""
+@asyncio.coroutine
+def async_setup(hass, config):
+    """Set up the zone."""
     entities = set()
-    for key in extract_domain_configs(config, DOMAIN):
-        entries = config[key]
-        if not isinstance(entries, list):
-            entries = entries,
-
-        for entry in entries:
-            name = entry.get(CONF_NAME)
-            latitude = entry.get(CONF_LATITUDE)
-            longitude = entry.get(CONF_LONGITUDE)
-            radius = entry.get(CONF_RADIUS)
-            icon = entry.get(CONF_ICON)
-            passive = entry.get(CONF_PASSIVE)
-
-            zone = Zone(
-                hass, name, latitude, longitude, radius, icon, passive, False)
-            add_zone(hass, name, zone, entities)
-            entities.add(zone.entity_id)
+    tasks = []
+    for _, entry in config_per_platform(config, DOMAIN):
+        name = entry.get(CONF_NAME)
+        zone = Zone(hass, name, entry[CONF_LATITUDE], entry[CONF_LONGITUDE],
+                    entry.get(CONF_RADIUS), entry.get(CONF_ICON),
+                    entry.get(CONF_PASSIVE))
+        zone.entity_id = async_generate_entity_id(
+            ENTITY_ID_FORMAT, name, entities)
+        tasks.append(zone.async_update_ha_state())
+        entities.add(zone.entity_id)
 
     if ENTITY_ID_HOME not in entities:
         zone = Zone(hass, hass.config.location_name,
                     hass.config.latitude, hass.config.longitude,
-                    DEFAULT_RADIUS, ICON_HOME, False, False)
-        add_zone(hass, hass.config.location_name, zone, entities)
+                    DEFAULT_RADIUS, ICON_HOME, False)
         zone.entity_id = ENTITY_ID_HOME
-        zone.update_ha_state()
+        tasks.append(zone.async_update_ha_state())
 
+    yield from asyncio.wait(tasks, loop=hass.loop)
     return True
-
-
-# Add a zone to the existing set
-def add_zone(hass, name, zone, entities=None):
-    """Add a zone from other components."""
-    _LOGGER.info("Adding new zone %s", name)
-    if entities is None:
-        _entities = set()
-    else:
-        _entities = entities
-    zone.entity_id = generate_entity_id(ENTITY_ID_FORMAT, name, _entities)
-    zone_exists = hass.states.get(zone.entity_id)
-    if zone_exists is None:
-        zone.update_ha_state()
-        _entities.add(zone.entity_id)
-        return zone
-    else:
-        _LOGGER.info("Zone already exists")
-        return zone_exists
 
 
 class Zone(Entity):
     """Representation of a Zone."""
 
-    # pylint: disable=too-many-arguments, too-many-instance-attributes
-    def __init__(self, hass, name, latitude, longitude, radius, icon, passive,
-                 imported):
+    def __init__(self, hass, name, latitude, longitude, radius, icon, passive):
         """Initialize the zone."""
         self.hass = hass
         self._name = name
@@ -153,7 +143,6 @@ class Zone(Entity):
         self._radius = radius
         self._icon = icon
         self._passive = passive
-        self._imported = imported
 
     @property
     def name(self):

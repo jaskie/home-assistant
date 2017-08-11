@@ -20,7 +20,8 @@ CONF_ENTITIES = 'entities'
 DOMAIN = 'weblink'
 
 ENTITIES_SCHEMA = vol.Schema({
-    vol.Required(CONF_URL): cv.url,
+    # pylint: disable=no-value-for-parameter
+    vol.Required(CONF_URL): vol.Url(),
     vol.Required(CONF_NAME): cv.string,
     vol.Optional(CONF_ICON): cv.icon,
 })
@@ -33,7 +34,7 @@ CONFIG_SCHEMA = vol.Schema({
 
 
 def setup(hass, config):
-    """Setup weblink component."""
+    """Set up the weblink component."""
     links = config.get(DOMAIN)
 
     for link in links.get(CONF_ENTITIES):
@@ -53,7 +54,7 @@ class Link(Entity):
         self._url = url
         self._icon = icon
         self.entity_id = DOMAIN + '.%s' % slugify(name)
-        self.update_ha_state()
+        self.schedule_update_ha_state()
 
     @property
     def icon(self):

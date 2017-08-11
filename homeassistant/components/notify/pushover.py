@@ -27,20 +27,18 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend({
 
 
 # pylint: disable=unused-variable
-def get_service(hass, config):
+def get_service(hass, config, discovery_info=None):
     """Get the Pushover notification service."""
     from pushover import InitError
 
     try:
-        return PushoverNotificationService(config[CONF_USER_KEY],
-                                           config[CONF_API_KEY])
+        return PushoverNotificationService(
+            config[CONF_USER_KEY], config[CONF_API_KEY])
     except InitError:
-        _LOGGER.error(
-            'Wrong API key supplied. Get it at https://pushover.net')
+        _LOGGER.error("Wrong API key supplied")
         return None
 
 
-# pylint: disable=too-few-public-methods
 class PushoverNotificationService(BaseNotificationService):
     """Implement the notification service for Pushover."""
 
@@ -61,13 +59,18 @@ class PushoverNotificationService(BaseNotificationService):
 
         data['title'] = kwargs.get(ATTR_TITLE, ATTR_TITLE_DEFAULT)
 
-        target = kwargs.get(ATTR_TARGET)
-        if target is not None:
-            data['device'] = target
+        targets = kwargs.get(ATTR_TARGET)
 
-        try:
-            self.pushover.send_message(message, **data)
-        except ValueError as val_err:
-            _LOGGER.error(str(val_err))
-        except RequestError:
-            _LOGGER.exception('Could not send pushover notification')
+        if not isinstance(targets, list):
+            targets = [targets]
+
+        for target in targets:
+            if target is not None:
+                data['device'] = target
+
+            try:
+                self.pushover.send_message(message, **data)
+            except ValueError as val_err:
+                _LOGGER.error(str(val_err))
+            except RequestError:
+                _LOGGER.exception("Could not send pushover notification")

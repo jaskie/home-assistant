@@ -1,19 +1,22 @@
 """The tests for the Rfxtrx light platform."""
 import unittest
 
-from homeassistant.bootstrap import _setup_component
+import pytest
+
+from homeassistant.setup import setup_component
 from homeassistant.components import rfxtrx as rfxtrx_core
 
-from tests.common import get_test_home_assistant
+from tests.common import get_test_home_assistant, mock_component
 
 
+@pytest.mark.skipif("os.environ.get('RFXTRX') != 'RUN'")
 class TestLightRfxtrx(unittest.TestCase):
     """Test the Rfxtrx light platform."""
 
     def setUp(self):
         """Setup things to be run when tests are started."""
-        self.hass = get_test_home_assistant(0)
-        self.hass.config.components = ['rfxtrx']
+        self.hass = get_test_home_assistant()
+        mock_component(self.hass, 'rfxtrx')
 
     def tearDown(self):
         """Stop everything that was started."""
@@ -25,7 +28,7 @@ class TestLightRfxtrx(unittest.TestCase):
 
     def test_valid_config(self):
         """Test configuration."""
-        self.assertTrue(_setup_component(self.hass, 'light', {
+        self.assertTrue(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'automatic_add': True,
                       'devices':
@@ -33,7 +36,7 @@ class TestLightRfxtrx(unittest.TestCase):
                                'name': 'Test',
                                rfxtrx_core.ATTR_FIREEVENT: True}}}}))
 
-        self.assertTrue(_setup_component(self.hass, 'light', {
+        self.assertTrue(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'automatic_add': True,
                       'devices':
@@ -44,7 +47,7 @@ class TestLightRfxtrx(unittest.TestCase):
 
     def test_invalid_config(self):
         """Test configuration."""
-        self.assertFalse(_setup_component(self.hass, 'light', {
+        self.assertFalse(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'automatic_add': True,
                       'invalid_key': 'afda',
@@ -56,14 +59,14 @@ class TestLightRfxtrx(unittest.TestCase):
 
     def test_default_config(self):
         """Test with 0 switches."""
-        self.assertTrue(_setup_component(self.hass, 'light', {
+        self.assertTrue(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'devices': {}}}))
         self.assertEqual(0, len(rfxtrx_core.RFX_DEVICES))
 
     def test_old_config(self):
         """Test with 1 light."""
-        self.assertTrue(_setup_component(self.hass, 'light', {
+        self.assertTrue(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'devices':
                       {'123efab1': {
@@ -107,7 +110,7 @@ class TestLightRfxtrx(unittest.TestCase):
 
     def test_one_light(self):
         """Test with 1 light."""
-        self.assertTrue(_setup_component(self.hass, 'light', {
+        self.assertTrue(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'devices':
                       {'0b1100cd0213c7f210010f51': {
@@ -176,7 +179,7 @@ class TestLightRfxtrx(unittest.TestCase):
 
     def test_several_lights(self):
         """Test with 3 lights."""
-        self.assertTrue(_setup_component(self.hass, 'light', {
+        self.assertTrue(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'signal_repetitions': 3,
                       'devices':
@@ -209,7 +212,7 @@ class TestLightRfxtrx(unittest.TestCase):
 
     def test_discover_light(self):
         """Test with discovery of lights."""
-        self.assertTrue(_setup_component(self.hass, 'light', {
+        self.assertTrue(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'automatic_add': True,
                       'devices': {}}}))
@@ -262,7 +265,7 @@ class TestLightRfxtrx(unittest.TestCase):
 
     def test_discover_light_noautoadd(self):
         """Test with discover of light when auto add is False."""
-        self.assertTrue(_setup_component(self.hass, 'light', {
+        self.assertTrue(setup_component(self.hass, 'light', {
             'light': {'platform': 'rfxtrx',
                       'automatic_add': False,
                       'devices': {}}}))

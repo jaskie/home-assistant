@@ -13,11 +13,12 @@ from homeassistant.components.notify import (
     ATTR_TITLE, ATTR_TITLE_DEFAULT, PLATFORM_SCHEMA, BaseNotificationService)
 from homeassistant.const import CONF_PASSWORD, CONF_SENDER, CONF_RECIPIENT
 
-REQUIREMENTS = ['sleekxmpp==1.3.1',
-                'dnspython3==1.12.0',
-                'pyasn1==0.1.9',
-                'pyasn1-modules==0.0.8']
+REQUIREMENTS = ['sleekxmpp==1.3.2',
+                'dnspython3==1.15.0',
+                'pyasn1==0.3.2',
+                'pyasn1-modules==0.0.11']
 
+_LOGGER = logging.getLogger(__name__)
 
 CONF_TLS = 'tls'
 
@@ -29,19 +30,13 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 })
 
 
-_LOGGER = logging.getLogger(__name__)
-
-
-def get_service(hass, config):
+def get_service(hass, config, discovery_info=None):
     """Get the Jabber (XMPP) notification service."""
     return XmppNotificationService(
-        config.get('sender'),
-        config.get('password'),
-        config.get('recipient'),
-        config.get('tls'))
+        config.get(CONF_SENDER), config.get(CONF_PASSWORD),
+        config.get(CONF_RECIPIENT), config.get(CONF_TLS))
 
 
-# pylint: disable=too-few-public-methods
 class XmppNotificationService(BaseNotificationService):
     """Implement the notification service for Jabber (XMPP)."""
 
@@ -55,9 +50,9 @@ class XmppNotificationService(BaseNotificationService):
     def send_message(self, message="", **kwargs):
         """Send a message to a user."""
         title = kwargs.get(ATTR_TITLE, ATTR_TITLE_DEFAULT)
-        data = "{}: {}".format(title, message) if title else message
+        data = '{}: {}'.format(title, message) if title else message
 
-        send_message(self._sender + '/home-assistant', self._password,
+        send_message('{}/home-assistant'.format(self._sender), self._password,
                      self._recipient, self._tls, data)
 
 
@@ -89,7 +84,7 @@ def send_message(sender, password, recipient, use_tls, message):
             self.disconnect(wait=True)
 
         def check_credentials(self, event):
-            """"Disconnect from the server if credentials are invalid."""
+            """Disconnect from the server if credentials are invalid."""
             self.disconnect()
 
     SendNotificationBot()

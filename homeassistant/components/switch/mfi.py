@@ -19,7 +19,6 @@ REQUIREMENTS = ['mficlient==0.3.0']
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_PORT = 6443
 DEFAULT_SSL = True
 DEFAULT_VERIFY_SSL = True
 
@@ -34,7 +33,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_HOST): cv.string,
     vol.Required(CONF_USERNAME): cv.string,
     vol.Required(CONF_PASSWORD): cv.string,
-    vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
+    vol.Optional(CONF_PORT): cv.port,
     vol.Optional(CONF_SSL, default=DEFAULT_SSL): cv.boolean,
     vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): cv.boolean,
 })
@@ -42,13 +41,13 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 
 # pylint: disable=unused-variable
 def setup_platform(hass, config, add_devices, discovery_info=None):
-    """Setup mFi sensors."""
+    """Set up mFi sensors."""
     host = config.get(CONF_HOST)
     username = config.get(CONF_USERNAME)
     password = config.get(CONF_PASSWORD)
     use_tls = config.get(CONF_SSL)
     verify_tls = config.get(CONF_VERIFY_SSL)
-    default_port = use_tls and DEFAULT_PORT or 6080
+    default_port = 6443 if use_tls else 6080
     port = int(config.get(CONF_PORT, default_port))
 
     from mficlient.client import FailedToLogin, MFiClient
@@ -57,7 +56,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         client = MFiClient(host, username, password, port=port,
                            use_tls=use_tls, verify=verify_tls)
     except (FailedToLogin, requests.exceptions.ConnectionError) as ex:
-        _LOGGER.error('Unable to connect to mFi: %s', str(ex))
+        _LOGGER.error("Unable to connect to mFi: %s", str(ex))
         return False
 
     add_devices(MfiSwitch(port)
@@ -76,7 +75,7 @@ class MfiSwitch(SwitchDevice):
 
     @property
     def should_poll(self):
-        """Polling is needed."""
+        """Return the polling state."""
         return True
 
     @property
@@ -101,20 +100,20 @@ class MfiSwitch(SwitchDevice):
             self._port.data['output'] = float(self._target_state)
             self._target_state = None
 
-    def turn_on(self):
+    def turn_on(self, **kwargs):
         """Turn the switch on."""
         self._port.control(True)
         self._target_state = True
 
-    def turn_off(self):
+    def turn_off(self, **kwargs):
         """Turn the switch off."""
         self._port.control(False)
         self._target_state = False
 
     @property
-    def current_power_mwh(self):
-        """Return the current power usage in mWh."""
-        return int(self._port.data.get('active_pwr', 0) * 1000)
+    def current_power_w(self):
+        """Return the current power usage in W."""
+        return int(self._port.data.get('active_pwr', 0))
 
     @property
     def device_state_attributes(self):

@@ -9,12 +9,11 @@ from homeassistant.components.notify import BaseNotificationService
 EVENT_NOTIFY = "notify"
 
 
-def get_service(hass, config):
+def get_service(hass, config, discovery_info=None):
     """Get the demo notification service."""
     return DemoNotificationService(hass)
 
 
-# pylint: disable=too-few-public-methods
 class DemoNotificationService(BaseNotificationService):
     """Implement demo notification service."""
 
@@ -25,7 +24,7 @@ class DemoNotificationService(BaseNotificationService):
     @property
     def targets(self):
         """Return a dictionary of registered targets."""
-        return ["test target"]
+        return {"test target name": "test target id"}
 
     def send_message(self, message="", **kwargs):
         """Send a message to a user."""

@@ -4,7 +4,6 @@ Support for SleepIQ from SleepNumber.
 For more details about this platform, please refer to the documentation at
 https://home-assistant.io/components/sleepiq/
 """
-
 import logging
 from datetime import timedelta
 
@@ -21,7 +20,6 @@ DOMAIN = 'sleepiq'
 
 REQUIREMENTS = ['sleepyq==0.6']
 
-# Return cached results if last scan was less then this time ago.
 MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=30)
 
 IS_IN_BED = 'is_in_bed'
@@ -40,7 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 DATA = None
 
 CONFIG_SCHEMA = vol.Schema({
-    DOMAIN: vol.Schema({
+    vol.Required(DOMAIN): vol.Schema({
         vol.Required(CONF_USERNAME): cv.string,
         vol.Required(CONF_PASSWORD): cv.string,
     }),
@@ -48,7 +46,7 @@ CONFIG_SCHEMA = vol.Schema({
 
 
 def setup(hass, config):
-    """Setup SleepIQ.
+    """Set up the SleepIQ component.
 
     Will automatically load sensor components to support
     devices discovered on the account.
@@ -76,9 +74,8 @@ def setup(hass, config):
     return True
 
 
-# pylint: disable=too-few-public-methods
 class SleepIQData(object):
-    """Gets the latest data from SleepIQ."""
+    """Get the latest data from SleepIQ."""
 
     def __init__(self, client):
         """Initialize the data object."""
@@ -96,7 +93,6 @@ class SleepIQData(object):
         self.beds = {bed.bed_id: bed for bed in beds}
 
 
-# pylint: disable=too-few-public-methods, too-many-instance-attributes
 class SleepIQSensor(Entity):
     """Implementation of a SleepIQ sensor."""
 
@@ -115,9 +111,8 @@ class SleepIQSensor(Entity):
     @property
     def name(self):
         """Return the name of the sensor."""
-        return 'SleepNumber {} {} {}'.format(self.bed.name,
-                                             self.side.sleeper.first_name,
-                                             self._name)
+        return 'SleepNumber {} {} {}'.format(
+            self.bed.name, self.side.sleeper.first_name, self._name)
 
     def update(self):
         """Get the latest data from SleepIQ and updates the states."""

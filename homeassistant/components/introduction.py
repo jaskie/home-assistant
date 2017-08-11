@@ -6,11 +6,17 @@ https://home-assistant.io/components/introduction/
 """
 import logging
 
+import voluptuous as vol
+
 DOMAIN = 'introduction'
+
+CONFIG_SCHEMA = vol.Schema({
+    DOMAIN: vol.Schema({}),
+}, extra=vol.ALLOW_EXTRA)
 
 
 def setup(hass, config=None):
-    """Setup the introduction component."""
+    """Set up the introduction component."""
     log = logging.getLogger(__name__)
     log.info("""
 

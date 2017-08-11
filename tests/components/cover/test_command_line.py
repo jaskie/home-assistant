@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from homeassistant.setup import setup_component
 import homeassistant.components.cover as cover
 from homeassistant.components.cover import (
     command_line as cmd_rs)
@@ -39,7 +40,10 @@ class TestCommandCover(unittest.TestCase):
             mock_run.return_value = b' foo bar '
             result = self.rs._query_state_value('runme')
             self.assertEqual('foo bar', result)
-            mock_run.assert_called_once_with('runme', shell=True)
+            self.assertEqual(mock_run.call_count, 1)
+            self.assertEqual(
+                mock_run.call_args, mock.call('runme', shell=True)
+            )
 
     def test_state_value(self):
         """Test with state value."""
@@ -52,7 +56,7 @@ class TestCommandCover(unittest.TestCase):
                 'command_stop': 'echo 0 > {}'.format(path),
                 'value_template': '{{ value }}'
             }
-            self.assertTrue(cover.setup(self.hass, {
+            self.assertTrue(setup_component(self.hass, cover.DOMAIN, {
                 'cover': {
                     'platform': 'command_line',
                     'covers': {

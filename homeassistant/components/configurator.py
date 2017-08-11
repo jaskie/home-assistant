@@ -6,14 +6,19 @@ This will return a request id that has to be used for future calls.
 A callback has to be provided to `request_config` which will be called when
 the user has submitted configuration information.
 """
+import asyncio
 import logging
 
-from homeassistant.const import EVENT_TIME_CHANGED, ATTR_FRIENDLY_NAME
+from homeassistant.core import callback as async_callback
+from homeassistant.const import EVENT_TIME_CHANGED, ATTR_FRIENDLY_NAME, \
+    ATTR_ENTITY_PICTURE
+from homeassistant.loader import bind_hass
 from homeassistant.helpers.entity import generate_entity_id
+from homeassistant.util.async import run_callback_threadsafe
 
-_INSTANCES = {}
 _LOGGER = logging.getLogger(__name__)
 _REQUESTS = {}
+_KEY_INSTANCE = 'configurator'
 
 ATTR_CONFIGURE_ID = 'configure_id'
 ATTR_DESCRIPTION = 'description'
@@ -33,20 +38,23 @@ STATE_CONFIGURE = 'configure'
 STATE_CONFIGURED = 'configured'
 
 
-# pylint: disable=too-many-arguments
+@bind_hass
 def request_config(
         hass, name, callback, description=None, description_image=None,
-        submit_caption=None, fields=None, link_name=None, link_url=None):
+        submit_caption=None, fields=None, link_name=None, link_url=None,
+        entity_picture=None):
     """Create a new request for configuration.
 
     Will return an ID to be used for sequent calls.
     """
-    instance = _get_instance(hass)
+    instance = run_callback_threadsafe(hass.loop,
+                                       _async_get_instance,
+                                       hass).result()
 
     request_id = instance.request_config(
         name, callback,
         description, description_image, submit_caption,
-        fields, link_name, link_url)
+        fields, link_name, link_url, entity_picture)
 
     _REQUESTS[request_id] = instance
 
@@ -71,22 +79,21 @@ def request_done(request_id):
         pass
 
 
-def setup(hass, config):
-    """Setup the configurator component."""
+@asyncio.coroutine
+def async_setup(hass, config):
+    """Set up the configurator component."""
     return True
 
 
-def _get_instance(hass):
+@async_callback
+def _async_get_instance(hass):
     """Get an instance per hass object."""
-    try:
-        return _INSTANCES[hass]
-    except KeyError:
-        _INSTANCES[hass] = Configurator(hass)
+    instance = hass.data.get(_KEY_INSTANCE)
 
-        if DOMAIN not in hass.config.components:
-            hass.config.components.append(DOMAIN)
+    if instance is None:
+        instance = hass.data[_KEY_INSTANCE] = Configurator(hass)
 
-        return _INSTANCES[hass]
+    return instance
 
 
 class Configurator(object):
@@ -97,15 +104,14 @@ class Configurator(object):
         self.hass = hass
         self._cur_id = 0
         self._requests = {}
-        hass.services.register(
+        hass.services.async_register(
             DOMAIN, SERVICE_CONFIGURE, self.handle_service_call)
 
-    # pylint: disable=too-many-arguments
     def request_config(
             self, name, callback,
             description, description_image, submit_caption,
-            fields, link_name, link_url):
-        """Setup a request for configuration."""
+            fields, link_name, link_url, entity_picture):
+        """Set up a request for configuration."""
         entity_id = generate_entity_id(ENTITY_ID_FORMAT, name, hass=self.hass)
 
         if fields is None:
@@ -119,6 +125,7 @@ class Configurator(object):
             ATTR_CONFIGURE_ID: request_id,
             ATTR_FIELDS: fields,
             ATTR_FRIENDLY_NAME: name,
+            ATTR_ENTITY_PICTURE: entity_picture,
         }
 
         data.update({
@@ -180,7 +187,7 @@ class Configurator(object):
 
         # field validation goes here?
 
-        callback(call.data.get(ATTR_FIELDS, {}))
+        self.hass.async_add_job(callback, call.data.get(ATTR_FIELDS, {}))
 
     def _generate_unique_id(self):
         """Generate a unique configurator ID."""
